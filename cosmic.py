@@ -83,6 +83,13 @@ class LED():
         self._state = 0
         GPIO.output(self._pin, 0)
 
+    def set(self, state):
+        if state:
+            self._state = 1
+        else:
+            self._state = 0
+        GPIO.output(self._pin, self._state)
+
     def toggle(self):
         self._state = not(self._state)
         GPIO.output(self._pin, self._state)
