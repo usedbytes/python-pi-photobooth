@@ -168,12 +168,32 @@ class PreviewActivity(Activity):
         self.preview_resolution = preview_resolution
         self.capture_thread = CaptureThread(self.camera)
         self.capture_thread.start()
+        self.covl = None
+        self.shovl = None
+        self.efovl = None
 
         self.images = {
                 '3': LoadImg('3.png'),
                 '2': LoadImg('2.png'),
                 '1': LoadImg('1.png'),
         }
+
+        self.effect = 0
+        self.effects = [
+            # name,        image_effect,  image_effect_params, color_effects
+            ('',           'none',        None,                None),
+            ('Invert',     'negative',    None,                None),
+            ('Solarize',   'solarize',    [128, 128, 128, 0],  None),
+            ('Sketch',     'sketch',      None,                None),
+            ('Emboss',     'emboss',      None,                None),
+            ('Cartoon',    'cartoon',     None,                None),
+            ('Pop Green',  'colorpoint',  0,                   None),
+            ('Pop Red',    'colorpoint',  1,                   None),
+            ('Pop Blue',   'colorpoint',  2,                   None),
+            ('Pop Purple', 'colorpoint',  3,                   None),
+            ('Film',       'film',        [50, 130, 120],      None),
+            ('Sepia',      'none',        None,                [100, 150]),
+        ]
 
     def onResume(self):
         self.camera.start_preview(resolution=self.preview_resolution)
@@ -195,6 +215,18 @@ class PreviewActivity(Activity):
                 self.stopCountdown()
             else:
                 self.startCountdown()
+        elif 'encoder' in event:
+            if self.state == PreviewActivity.NONE:
+                self.effect = self.effect + event['encoder']
+                if self.effect < 0:
+                    self.effect += len(self.effects)
+                elif self.effect >= len(self.effects):
+                    self.effect -= len(self.effects)
+                effect = self.effects[self.effect]
+                self.camera.image_effect = effect[1]
+                self.camera.color_effects = effect[3]
+                if effect[2] is not None:
+                    self.camera.image_effect_params = effect[2]
 
     def onDraw(self):
         now = time.time()
@@ -272,7 +304,16 @@ class PreviewActivity(Activity):
 current = PreviewActivity(resolution=(3280, 2464), preview_resolution=(768, 576))
 current.onResume()
 
+def sign(val):
+    if val > 0:
+        return 1
+    elif val < 0:
+        return -1
+    else:
+        return 0
+
 try:
+    encoder_pos = enc.count()
     while True:
         time.sleep (1.0/24)
 
@@ -283,6 +324,10 @@ try:
             led2.toggle()
         if button3.pressed():
             current.onInputReceived({'button': SHUTTER_BUTTON})
+        if enc.count() != encoder_pos:
+            val = sign(enc.count() - encoder_pos)
+            encoder_pos += val
+            current.onInputReceived({'encoder': val})
 
         current.onDraw()
 
