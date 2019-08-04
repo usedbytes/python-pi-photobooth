@@ -3,7 +3,7 @@
 import threading
 import time
 import RPi.GPIO as GPIO
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import tkinter
 import cosmic
@@ -48,14 +48,24 @@ PLAY_BUTTON = 1
 #root.configure(background='blue')
 #window_size = (root.winfo_width(), root.winfo_height())
 #root.geometry('%dx%d+0+0' % (window_size[0], window_size[1]))
-window_size = (1024, 600)
 
 
 #pimg.paste(png, (int((padded_size[0] - png.size[0]) / 2), int((padded_size[1] - png.size[1]) / 2)), png)
 
+def sign(val):
+    if val > 0:
+        return 1
+    elif val < 0:
+        return -1
+    else:
+        return 0
+
+def align_size(size):
+    return ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
+
 class Overlay():
     def __init__(self, camera, size, filename = None, color = (0, 0, 0)):
-        padded_size = ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
+        padded_size = align_size(size)
         self.pimg = Image.new('RGB', (padded_size[0], padded_size[1]), color)
         self.ovl = camera.add_overlay(self.pimg.tobytes(), format='rgb', size=self.pimg.size)
         self.z = 3
@@ -64,6 +74,16 @@ class Overlay():
         if filename is not None:
             self.from_file(filename)
         self.hide()
+
+    def size(self):
+        return self.pimg.size
+
+    def window(self, window):
+        if window != None:
+            self.ovl.window = window
+            self.ovl.fullscreen = False
+        else:
+            self.ovl.fullscreen = True
 
     def show(self):
         self.ovl.alpha = self.alpha
@@ -97,7 +117,7 @@ class Overlay():
 
 class AlphaOverlay(Overlay):
     def __init__(self, camera, size, filename = None):
-        padded_size = ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
+        padded_size = align_size(size)
         self.pimg = Image.new('RGBA', (padded_size[0], padded_size[1]), (0, 0, 0, 0))
         self.ovl = camera.add_overlay(self.pimg.tobytes(), format='rgba', size=self.pimg.size)
         self.z = 3
@@ -158,12 +178,13 @@ class PreviewActivity(Activity):
     COUNTDOWN = 1
     SHUTTER = 2
 
-    def __init__(self, resolution, preview_resolution):
+    def __init__(self, screen_resolution, resolution, preview_resolution):
         self.state = PreviewActivity.NONE
         self.substate = 0
         self.time = time.time()
         self.camera = picamera.PiCamera()
         self.camera.framerate = 24
+        self.screen_resolution = screen_resolution
         self.camera.resolution = resolution
         self.preview_resolution = preview_resolution
         self.capture_thread = CaptureThread(self.camera)
@@ -181,19 +202,38 @@ class PreviewActivity(Activity):
         self.effect = 0
         self.effects = [
             # name,        image_effect,  image_effect_params, color_effects
-            ('',           'none',        None,                None),
-            ('Invert',     'negative',    None,                None),
-            ('Solarize',   'solarize',    [128, 128, 128, 0],  None),
-            ('Sketch',     'sketch',      None,                None),
-            ('Emboss',     'emboss',      None,                None),
-            ('Cartoon',    'cartoon',     None,                None),
-            ('Pop Green',  'colorpoint',  0,                   None),
-            ('Pop Red',    'colorpoint',  1,                   None),
-            ('Pop Blue',   'colorpoint',  2,                   None),
-            ('Pop Purple', 'colorpoint',  3,                   None),
-            ('Film',       'film',        [50, 130, 120],      None),
-            ('Sepia',      'none',        None,                [100, 150]),
+            ['',           'none',        None,                None],
+            ['Invert',     'negative',    None,                None],
+            ['Solarize',   'solarize',    [128, 128, 128, 0],  None],
+            ['Sketch',     'sketch',      None,                None],
+            ['Emboss',     'emboss',      None,                None],
+            ['Cartoon',    'cartoon',     None,                None],
+            ['Pop Green',  'colorpoint',  0,                   None],
+            ['Pop Red',    'colorpoint',  1,                   None],
+            ['Pop Blue',   'colorpoint',  2,                   None],
+            ['Pop Purple', 'colorpoint',  3,                   None],
+            ['Film',       'film',        [50, 130, 120],      None],
+            ['Sepia',      'none',        None,                [100, 150]],
         ]
+        font = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 28)
+        for e in self.effects:
+            if len(e[0]) == 0:
+                e.append(None)
+                continue
+            string = "Effect: " + e[0]
+            fontsize = font.getsize(string)
+            size = align_size(fontsize)
+            txt = Image.new('RGBA', size, (0, 0, 0, 0))
+            d = ImageDraw.Draw(txt)
+            x = (size[0] - fontsize[0]) / 2
+            y = (size[1] - fontsize[1]) / 2
+            d.text((x-1, y-1), string, font=font, fill=(0, 0, 0, 200))
+            d.text((x+1, y-1), string, font=font, fill=(0, 0, 0, 200))
+            d.text((x-1, y+1), string, font=font, fill=(0, 0, 0, 200))
+            d.text((x+1, y+1), string, font=font, fill=(0, 0, 0, 200))
+            d.text((x, y), string, font=font, fill=(255, 255, 255, 200))
+            e.append(txt)
+
 
     def onResume(self):
         self.camera.start_preview(resolution=self.preview_resolution)
@@ -201,6 +241,9 @@ class PreviewActivity(Activity):
     def onPause(self):
         self.stopCountdown()
         self.stopShutter()
+        if self.efovl is not None:
+            self.efovl.close()
+            self.efovl = None
         self.camera.stop_preview()
 
     def onExit(self):
@@ -209,7 +252,6 @@ class PreviewActivity(Activity):
         self.onPause()
 
     def onInputReceived(self, event):
-        print(event)
         if 'button' in event and event['button'] == SHUTTER_BUTTON:
             if self.state == PreviewActivity.COUNTDOWN:
                 self.stopCountdown()
@@ -227,6 +269,24 @@ class PreviewActivity(Activity):
                 self.camera.color_effects = effect[3]
                 if effect[2] is not None:
                     self.camera.image_effect_params = effect[2]
+
+                if self.efovl is not None:
+                    self.efovl.close()
+                    self.efovl = None
+
+                if effect[-1] is not None:
+                    img = effect[-1]
+                    self.efovl = AlphaOverlay(self.camera, img.size)
+                    self.efovl.hide()
+                    self.efovl.window((
+                        int((self.screen_resolution[0] - img.size[0]) / 2),
+                        int(self.screen_resolution[1] / 20),
+                        int(img.size[0]),
+                        int(img.size[1]),
+                    ))
+                    self.efovl.set_content(img.tobytes())
+                    self.efovl.show()
+
 
     def onDraw(self):
         now = time.time()
@@ -275,6 +335,12 @@ class PreviewActivity(Activity):
         self.substate = 0
         self.time = time.time()
         self.covl = AlphaOverlay(self.camera, self.images['3'].size)
+        self.covl.window((
+            int((self.screen_resolution[0] - self.covl.size()[0]) / 2),
+            int((self.screen_resolution[1] - self.covl.size()[1]) / 2),
+            int(self.covl.size()[0]),
+            int(self.covl.size()[1]),
+        ))
         self.covl.set_content(self.images['3'].tobytes())
         self.covl.show()
         led3.on()
@@ -300,17 +366,17 @@ class PreviewActivity(Activity):
         self.capture_thread.takePhoto()
 
 # (3280, 2464): v2 module max resolution
-# (768, 576): 4:3, multiple of 32, and fits into 1024x600 screen
-current = PreviewActivity(resolution=(3280, 2464), preview_resolution=(768, 576))
-current.onResume()
+capture_resolution = (3280, 2464)
 
-def sign(val):
-    if val > 0:
-        return 1
-    elif val < 0:
-        return -1
-    else:
-        return 0
+# (768, 576): 4:3, multiple of 32, and fits into 1024x600 screen
+preview_resolution = (768, 576)
+
+# Seems to be what it picks by default on my QHD monitor
+window_size = (1824, 984)
+
+current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution)
+
+current.onResume()
 
 try:
     encoder_pos = enc.count()
