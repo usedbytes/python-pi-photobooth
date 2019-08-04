@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import threading
 import time
 import RPi.GPIO as GPIO
 from PIL import Image
@@ -53,7 +54,7 @@ window_size = (1024, 600)
 #pimg.paste(png, (int((padded_size[0] - png.size[0]) / 2), int((padded_size[1] - png.size[1]) / 2)), png)
 
 class Overlay():
-    def __init__(self, size, filename = None, color = (0, 0, 0)):
+    def __init__(self, camera, size, filename = None, color = (0, 0, 0)):
         padded_size = ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
         self.pimg = Image.new('RGB', (padded_size[0], padded_size[1]), color)
         self.ovl = camera.add_overlay(self.pimg.tobytes(), format='rgb', size=self.pimg.size)
@@ -95,7 +96,7 @@ class Overlay():
         self.set_content(self.pimg.tobytes())
 
 class AlphaOverlay(Overlay):
-    def __init__(self, size, filename = None):
+    def __init__(self, camera, size, filename = None):
         padded_size = ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
         self.pimg = Image.new('RGBA', (padded_size[0], padded_size[1]), (0, 0, 0, 0))
         self.ovl = camera.add_overlay(self.pimg.tobytes(), format='rgba', size=self.pimg.size)
@@ -129,6 +130,29 @@ def LoadImg(filename):
         pimg.paste(png, (int((pimg.size[0] - png.size[0]) / 2), int((pimg.size[1] - png.size[1]) / 2)), png)
         return pimg
 
+class CaptureThread(threading.Thread):
+    def __init__(self, camera):
+        threading.Thread.__init__(self)
+        self.camera = camera
+        self.exit = threading.Event()
+        self.shutter_sem = threading.Semaphore(value=0)
+        self.frame_sem = threading.Semaphore(value=0)
+
+    def takePhoto(self):
+        self.shutter_sem.release()
+
+    def getPhoto(self, blocking=True):
+        return self.frame_sem.acquire(blocking=blocking)
+
+    def stop(self):
+        self.exit.set()
+
+    def run(self):
+        while not self.exit.is_set():
+            if self.shutter_sem.acquire(timeout=0.5):
+                self.camera.capture('out.jpg')
+                self.frame_sem.release()
+
 class PreviewActivity(Activity):
     NONE = 0
     COUNTDOWN = 1
@@ -136,11 +160,14 @@ class PreviewActivity(Activity):
 
     def __init__(self, resolution, preview_resolution):
         self.state = PreviewActivity.NONE
+        self.substate = 0
         self.time = time.time()
         self.camera = picamera.PiCamera()
         self.camera.framerate = 24
         self.camera.resolution = resolution
         self.preview_resolution = preview_resolution
+        self.capture_thread = CaptureThread(self.camera)
+        self.capture_thread.start()
 
         self.images = {
                 '3': LoadImg('3.png'),
@@ -156,41 +183,53 @@ class PreviewActivity(Activity):
         self.stopShutter()
         self.camera.stop_preview()
 
+    def onExit(self):
+        self.capture_thread.stop()
+        self.capture_thread.join()
+        self.onPause()
+
     def onInputReceived(self, event):
         print(event)
         if 'button' in event and event['button'] == SHUTTER_BUTTON:
-            if self.state == COUNTDOWN:
+            if self.state == PreviewActivity.COUNTDOWN:
                 self.stopCountdown()
             else:
                 self.startCountdown()
 
     def onDraw(self):
         now = time.time()
+        since = now - self.time
         if self.state == PreviewActivity.COUNTDOWN:
-            if now - self.time > 0.8:
+            if self.substate == 0 and since > 0.8:
                 led3.off()
-            elif now - stamp >= 1.0:
+                self.substate = 1
+            elif self.substate == 1 and since > 1.0 :
                 self.covl.set_content(self.images['2'].tobytes())
                 led3.on()
-            elif now - self.time > 1.8:
+                self.substate = 2
+            elif self.substate == 2 and since > 1.8:
                 led3.off()
-            elif now - stamp >= 2.0:
+                self.substate = 3
+            elif self.substate == 3 and since > 2.0:
                 self.covl.set_content(self.images['1'].tobytes())
                 led3.on()
-            elif now - self.time > 2.8:
+                self.substate = 4
+            elif self.substate == 4 and since > 2.8:
                 led3.off()
-            elif now - self.time >= 3.0:
+                self.substate = 5
+            elif self.substate == 5 and since > 3.0:
                 # Relies on us being single-threaded here to not
                 # race with state changing somehow.
                 self.stopCountdown()
                 self.startShutter()
+                self.substate = 6
         elif self.state == PreviewActivity.SHUTTER:
-            fadeTime = 0.8
-            remaining = 1 - ((now - self.time) / fadeTime)
+            fadeTime = 1.0
+            remaining = 1.0 - (since / fadeTime)
             if remaining <= 0:
                 self.stopShutter()
             else:
-                self.shovl.alpha = int(255 * remaining)
+                self.shovl.set_alpha(int(255 * remaining))
 
     def stopCountdown(self):
         self.state = PreviewActivity.NONE
@@ -201,33 +240,37 @@ class PreviewActivity(Activity):
 
     def startCountdown(self):
         self.state = PreviewActivity.COUNTDOWN
+        self.substate = 0
         self.time = time.time()
-        self.covl = AlphaOverlay(self.images['3'].size)
-        self.covl.set_content(self.images['3'].tobytes()
+        self.covl = AlphaOverlay(self.camera, self.images['3'].size)
+        self.covl.set_content(self.images['3'].tobytes())
         self.covl.show()
         led3.on()
 
     def stopShutter(self):
+        if not self.capture_thread.getPhoto(blocking=False):
+            return
         self.state = PreviewActivity.NONE
+        led3.off()
         if self.shovl is not None:
             self.shovl.close()
             self.shovl = None
-        led3.off()
 
     def startShutter(self):
         self.state = PreviewActivity.SHUTTER
-        self.time = time.time()
-        self.shovl = Overlay(self.preview_resolution, color='white'))
-        self.shovl.show()
         led3.on()
+        self.time = time.time()
+        self.shovl = Overlay(self.camera, self.preview_resolution, color='white')
+        self.shovl.show()
         self.takePhoto()
 
     def takePhoto(self):
-        self.camera.capture('out.jpg')
+        self.capture_thread.takePhoto()
 
 # (3280, 2464): v2 module max resolution
 # (768, 576): 4:3, multiple of 32, and fits into 1024x600 screen
 current = PreviewActivity(resolution=(3280, 2464), preview_resolution=(768, 576))
+current.onResume()
 
 try:
     while True:
@@ -241,11 +284,9 @@ try:
         if button3.pressed():
             current.onInputReceived({'button': SHUTTER_BUTTON})
 
-        print("Encoder:" + str(enc.count()) + " " + str(enc.pressed()))
-
         current.onDraw()
 
 except KeyboardInterrupt:
-    pass
+    current.onExit()
 
 GPIO.cleanup()
