@@ -1,0 +1,15 @@
+[Unit]
+Description=Photobooth service
+
+[Service]
+Type=exec
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Programming/photobooth
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/python3 main.py
+After=display-manager.target
+KillSignal=SIGINT
+
+[Install]
+WantedBy=graphical.target
