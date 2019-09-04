@@ -5,7 +5,7 @@ import time
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
 
-import tkinter
+#import tkinter
 import cosmic
 
 import picamera
@@ -41,14 +41,8 @@ SHUTTER_BUTTON = 3
 QUAD_BUTTON = 2
 PLAY_BUTTON = 1
 
-#root = tkinter.Tk()
-#root.config(cursor='none')
-#root.attributes("-fullscreen", True)
-#root.update()
-#root.configure(background='blue')
 #window_size = (root.winfo_width(), root.winfo_height())
 #root.geometry('%dx%d+0+0' % (window_size[0], window_size[1]))
-
 
 #pimg.paste(png, (int((padded_size[0] - png.size[0]) / 2), int((padded_size[1] - png.size[1]) / 2)), png)
 
@@ -184,6 +178,7 @@ class PreviewActivity(Activity):
         self.time = time.time()
         self.camera = picamera.PiCamera()
         self.camera.framerate = 24
+        self.camera.hflip = True
         self.screen_resolution = screen_resolution
         self.camera.resolution = resolution
         self.preview_resolution = preview_resolution
@@ -366,13 +361,21 @@ class PreviewActivity(Activity):
         self.capture_thread.takePhoto()
 
 # (3280, 2464): v2 module max resolution
-capture_resolution = (3280, 2464)
+#capture_resolution = (3280, 2464)
+# 1640x1232 is smallest full frame mode
+capture_resolution = (1640, 1232)
 
 # (768, 576): 4:3, multiple of 32, and fits into 1024x600 screen
 preview_resolution = (768, 576)
 
-# Seems to be what it picks by default on my QHD monitor
-window_size = (1824, 984)
+window_size = (1024, 600)
+
+#root = tkinter.Tk()
+#root.config(cursor='none')
+#root.attributes("-fullscreen", True)
+#root.configure(background='blue')
+#root.update()
+#app = tkinter.Frame(root)
 
 current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution)
 
@@ -396,8 +399,8 @@ try:
             current.onInputReceived({'encoder': val})
 
         current.onDraw()
-
 except KeyboardInterrupt:
-    current.onExit()
+    pass
 
+current.onExit()
 GPIO.cleanup()
