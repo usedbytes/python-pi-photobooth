@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import pygame
 import threading
 import time
 import RPi.GPIO as GPIO
@@ -376,6 +377,13 @@ window_size = (1024, 600)
 #root.configure(background='blue')
 #root.update()
 #app = tkinter.Frame(root)
+
+pygame.init()
+pygame.mouse.set_visible(False)
+screen = pygame.display.set_mode((1024, 600))
+screen.fill((255, 0, 0))
+pygame.display.flip()
+
 
 current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution)
 
