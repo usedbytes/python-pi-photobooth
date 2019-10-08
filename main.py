@@ -1,7 +1,12 @@
 #!/usr/bin/python3
 
+import shutil
+import os
+import datetime
+import io
 import pygame
 import threading
+import queue
 import time
 import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
@@ -56,7 +61,7 @@ def sign(val):
         return 0
 
 def align_size(size):
-    return ((size[0] + 31) & ~0x1f, (size[1] + 31) & ~0x1f)
+    return ((size[0] + 31) & ~0x1f, (size[1] + 15) & ~0xf)
 
 class Overlay():
     def __init__(self, camera, size, filename = None, color = (0, 0, 0)):
@@ -140,7 +145,7 @@ class Activity():
 
 def LoadImg(filename):
         png = Image.open(filename)
-        padded_size = ((png.size[0] + 31) & ~0x1f, (png.size[1] + 31) & ~0x1f)
+        padded_size = align_size(png.size)
         pimg = Image.new('RGBA', (padded_size[0], padded_size[1]), (0, 0, 0, 0))
         pimg.paste(png, (int((pimg.size[0] - png.size[0]) / 2), int((pimg.size[1] - png.size[1]) / 2)), png)
         return pimg
@@ -152,12 +157,16 @@ class CaptureThread(threading.Thread):
         self.exit = threading.Event()
         self.shutter_sem = threading.Semaphore(value=0)
         self.frame_sem = threading.Semaphore(value=0)
+        self.frame_queue = queue.Queue(maxsize=4)
 
     def takePhoto(self):
         self.shutter_sem.release()
 
     def getPhoto(self, blocking=True):
-        return self.frame_sem.acquire(blocking=blocking)
+        try:
+            return self.frame_queue.get(blocking)
+        except queue.Empty:
+            return None
 
     def stop(self):
         self.exit.set()
@@ -165,15 +174,21 @@ class CaptureThread(threading.Thread):
     def run(self):
         while not self.exit.is_set():
             if self.shutter_sem.acquire(timeout=0.5):
-                self.camera.capture('out.jpg')
-                self.frame_sem.release()
+                stream = io.BytesIO()
+                self.camera.capture(stream, 'rgba')
+                im = Image.frombuffer('RGBA', align_size(self.camera.resolution),
+                            stream.getbuffer(), 'raw', 'RGBA', 0, 1)
+                im = im.crop((0, 0, self.camera.resolution[0], self.camera.resolution[1]))
+                self.frame_queue.put(im)
 
 class PreviewActivity(Activity):
     NONE = 0
     COUNTDOWN = 1
     SHUTTER = 2
+    REPEATSHUTTER = 3
 
-    def __init__(self, screen_resolution, resolution, preview_resolution):
+    def __init__(self, screen_resolution, resolution, preview_resolution, album):
+        self.album = album
         self.state = PreviewActivity.NONE
         self.substate = 0
         self.time = time.time()
@@ -188,6 +203,9 @@ class PreviewActivity(Activity):
         self.covl = None
         self.shovl = None
         self.efovl = None
+        self.quad = False
+
+        self.shots = 0
 
         self.images = {
                 '3': LoadImg('3.png'),
@@ -251,8 +269,12 @@ class PreviewActivity(Activity):
         if 'button' in event and event['button'] == SHUTTER_BUTTON:
             if self.state == PreviewActivity.COUNTDOWN:
                 self.stopCountdown()
-            else:
+            elif self.state == PreviewActivity.NONE:
                 self.startCountdown()
+        elif 'button' in event and event['button'] == QUAD_BUTTON:
+            if self.state == PreviewActivity.NONE:
+                self.quad = not(self.quad)
+                led2.set(self.quad)
         elif 'encoder' in event:
             if self.state == PreviewActivity.NONE:
                 self.effect = self.effect + event['encoder']
@@ -282,7 +304,6 @@ class PreviewActivity(Activity):
                     ))
                     self.efovl.set_content(img.tobytes())
                     self.efovl.show()
-
 
     def onDraw(self):
         now = time.time()
@@ -318,6 +339,9 @@ class PreviewActivity(Activity):
                 self.stopShutter()
             else:
                 self.shovl.set_alpha(int(255 * remaining))
+        elif self.state == PreviewActivity.REPEATSHUTTER:
+            if since >= 0.8:
+                self.startShutter()
 
     def stopCountdown(self):
         self.state = PreviewActivity.NONE
@@ -330,6 +354,11 @@ class PreviewActivity(Activity):
         self.state = PreviewActivity.COUNTDOWN
         self.substate = 0
         self.time = time.time()
+        if self.quad:
+            self.shots = 4
+        else:
+            self.shots = 1
+        self.frames = []
         self.covl = AlphaOverlay(self.camera, self.images['3'].size)
         self.covl.window((
             int((self.screen_resolution[0] - self.covl.size()[0]) / 2),
@@ -342,13 +371,24 @@ class PreviewActivity(Activity):
         led3.on()
 
     def stopShutter(self):
-        if not self.capture_thread.getPhoto(blocking=False):
+        im = self.capture_thread.getPhoto(blocking=False)
+        if im is None:
             return
+
+        self.frames.append(im)
+
         self.state = PreviewActivity.NONE
         led3.off()
         if self.shovl is not None:
             self.shovl.close()
             self.shovl = None
+
+        self.shots = self.shots - 1
+        if self.shots > 0:
+            self.state = PreviewActivity.REPEATSHUTTER
+        else:
+            self.album.writeOut(self.frames)
+            self.frames = None
 
     def startShutter(self):
         self.state = PreviewActivity.SHUTTER
@@ -360,6 +400,54 @@ class PreviewActivity(Activity):
 
     def takePhoto(self):
         self.capture_thread.takePhoto()
+
+
+class Album:
+    def __init__(self, directory, backup = None):
+        self.directory = directory
+        try:
+            os.mkdir(self.directory)
+        except FileExistsError:
+            pass
+
+        self.backup = backup
+        if self.backup is not None:
+            try:
+                os.mkdir(self.backup)
+            except FileExistsError:
+                pass
+
+    def writeOut(self, frames):
+            filename = self.genFilename()
+            if len(frames) == 1:
+                frames[0].save(filename, 'jpeg')
+            elif len(frames) == 4:
+                size = frames[0].size
+                points = [
+                    (0, 0),
+                    (size[0], 0),
+                    (0, size[1]),
+                    size,
+                ]
+                canvas = Image.new('RGBA', (size[0] * 2, size[1] * 2), (255, 255, 255, 255))
+                for i in range(len(points)):
+                    canvas.paste(frames[i], points[i])
+                canvas.save(filename, 'jpeg')
+                canvas.close()
+            else:
+                print("Unexpected number of frames {}".format(len(frames)))
+
+            for f in frames:
+                f.close()
+
+            if self.backup is not None:
+                shutil.copy2(filename, self.backup)
+
+            return filename
+
+    def genFilename(self):
+        return "{}/IMG_{}.jpg".format(self.directory,
+                datetime.datetime.utcnow().strftime("%Y-%m-%d_%H%M%SUTC"))
 
 # (3280, 2464): v2 module max resolution
 #capture_resolution = (3280, 2464)
@@ -379,13 +467,14 @@ window_size = (1024, 600)
 #app = tkinter.Frame(root)
 
 pygame.init()
-pygame.mouse.set_visible(False)
 screen = pygame.display.set_mode((1024, 600))
-screen.fill((255, 0, 0))
+pygame.mouse.set_visible(False)
+screen.fill((0, 0, 0))
 pygame.display.flip()
 
+album = Album('out')
 
-current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution)
+current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
 
 current.onResume()
 
@@ -397,8 +486,7 @@ try:
         if button1.pressed():
             print("Button 1 (Play)")
         if button2.pressed():
-            print("Button 2 (Quad)")
-            led2.toggle()
+            current.onInputReceived({'button': QUAD_BUTTON})
         if button3.pressed():
             current.onInputReceived({'button': SHUTTER_BUTTON})
         if enc.count() != encoder_pos:
