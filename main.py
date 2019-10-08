@@ -350,7 +350,7 @@ class PreviewActivity(Activity):
             if since >= 0.8:
                 self.startShutter()
         elif self.state == PreviewActivity.REVIEW:
-            if since >= 3.0:
+            if since >= self.substate:
                 screen.fill((0, 0, 0))
                 pygame.display.flip()
                 self.revovl.close()
@@ -401,6 +401,11 @@ class PreviewActivity(Activity):
         if self.shots > 0:
             self.state = PreviewActivity.REPEATSHUTTER
         else:
+            # Hack: Longer review for quads
+            self.substate = 2.0
+            if len(self.frames) == 4:
+                self.substate = 4.0
+
             filename = self.album.writeOut(self.frames)
             self.frames = None
 
