@@ -110,9 +110,14 @@ class Overlay():
             return
         self.ovl.update(content)
 
-    def from_file(self, filename):
+    def from_file(self, filename, resize = False):
         png = Image.open(filename)
-        self.pimg.paste(png, (int((self.pimg.size[0] - png.size[0]) / 2), int((self.pimg.size[1] - png.size[1]) / 2)), png)
+        if resize:
+            png.thumbnail(self.pimg.size)
+        if png.mode == 'RGBA':
+            self.pimg.paste(png, (int((self.pimg.size[0] - png.size[0]) / 2), int((self.pimg.size[1] - png.size[1]) / 2)), png)
+        else:
+            self.pimg.paste(png, (int((self.pimg.size[0] - png.size[0]) / 2), int((self.pimg.size[1] - png.size[1]) / 2)))
         self.set_content(self.pimg.tobytes())
 
 class AlphaOverlay(Overlay):
@@ -186,6 +191,7 @@ class PreviewActivity(Activity):
     COUNTDOWN = 1
     SHUTTER = 2
     REPEATSHUTTER = 3
+    REVIEW = 4
 
     def __init__(self, screen_resolution, resolution, preview_resolution, album):
         self.album = album
@@ -203,6 +209,7 @@ class PreviewActivity(Activity):
         self.covl = None
         self.shovl = None
         self.efovl = None
+        self.revovl = None
         self.quad = False
 
         self.shots = 0
@@ -342,6 +349,13 @@ class PreviewActivity(Activity):
         elif self.state == PreviewActivity.REPEATSHUTTER:
             if since >= 0.8:
                 self.startShutter()
+        elif self.state == PreviewActivity.REVIEW:
+            if since >= 3.0:
+                screen.fill((0, 0, 0))
+                pygame.display.flip()
+                self.revovl.close()
+                self.revovl = None
+                self.state = PreviewActivity.NONE
 
     def stopCountdown(self):
         self.state = PreviewActivity.NONE
@@ -387,8 +401,17 @@ class PreviewActivity(Activity):
         if self.shots > 0:
             self.state = PreviewActivity.REPEATSHUTTER
         else:
-            self.album.writeOut(self.frames)
+            filename = self.album.writeOut(self.frames)
             self.frames = None
+
+            self.revovl = Overlay(self.camera, self.preview_resolution)
+            self.revovl.from_file(filename, True)
+            self.revovl.show()
+
+            screen.fill((255, 255, 255))
+            pygame.display.flip()
+            self.state = PreviewActivity.REVIEW
+            self.time = time.time()
 
     def startShutter(self):
         self.state = PreviewActivity.SHUTTER
