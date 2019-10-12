@@ -24,6 +24,8 @@ pin_led1 = 14
 pin_led2 = 15
 pin_led3 = 16
 
+pin_flash = 12
+
 def sign(val):
     if val > 0:
         return 1
@@ -43,6 +45,9 @@ preview_resolution = (768, 576)
 window_size = (1024, 600)
 
 GPIO.setmode(GPIO.BCM)
+
+flash = cosmic.LED(pin_flash)
+flash.on()
 
 panel = cosmic.Cosmic(pin_enc_a, pin_enc_b, pin_enc_button,
             pin_b1, pin_b2, pin_b3,
