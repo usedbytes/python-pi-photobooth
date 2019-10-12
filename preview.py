@@ -199,6 +199,7 @@ class PreviewActivity(activity.Activity):
         self.screen.fill((0, 0, 0))
         pygame.display.flip()
         self.camera.start_preview(resolution=self.preview_resolution)
+        self.setEffect(self.effect)
 
     def onPause(self):
         self.flash.off()
@@ -213,6 +214,35 @@ class PreviewActivity(activity.Activity):
         self.capture_thread.stop()
         self.capture_thread.join()
         self.onPause()
+
+    def setEffect(self, effect):
+        if effect < 0:
+            effect += len(self.effects)
+        elif effect >= len(self.effects):
+            effect -= len(self.effects)
+        self.effect = effect
+        effect = self.effects[self.effect]
+        self.camera.image_effect = effect[1]
+        self.camera.color_effects = effect[3]
+        if effect[2] is not None:
+            self.camera.image_effect_params = effect[2]
+
+        if self.efovl is not None:
+            self.efovl.close()
+            self.efovl = None
+
+        if effect[-1] is not None:
+            img = effect[-1]
+            self.efovl = AlphaOverlay(self.camera, img.size)
+            self.efovl.hide()
+            self.efovl.window((
+                int((self.screen_resolution[0] - img.size[0]) / 2),
+                int(self.screen_resolution[1] / 20),
+                int(img.size[0]),
+                int(img.size[1]),
+            ))
+            self.efovl.set_content(img.tobytes())
+            self.efovl.show()
 
     def onInputReceived(self, events):
         for event in events:
@@ -233,33 +263,8 @@ class PreviewActivity(activity.Activity):
                     return 'player'
             elif 'encoder' in event:
                 if self.state == PreviewActivity.NONE:
-                    self.effect = self.effect + event['encoder']
-                    if self.effect < 0:
-                        self.effect += len(self.effects)
-                    elif self.effect >= len(self.effects):
-                        self.effect -= len(self.effects)
-                    effect = self.effects[self.effect]
-                    self.camera.image_effect = effect[1]
-                    self.camera.color_effects = effect[3]
-                    if effect[2] is not None:
-                        self.camera.image_effect_params = effect[2]
-
-                    if self.efovl is not None:
-                        self.efovl.close()
-                        self.efovl = None
-
-                    if effect[-1] is not None:
-                        img = effect[-1]
-                        self.efovl = AlphaOverlay(self.camera, img.size)
-                        self.efovl.hide()
-                        self.efovl.window((
-                            int((self.screen_resolution[0] - img.size[0]) / 2),
-                            int(self.screen_resolution[1] / 20),
-                            int(img.size[0]),
-                            int(img.size[1]),
-                        ))
-                        self.efovl.set_content(img.tobytes())
-                        self.efovl.show()
+                    effect = self.effect + event['encoder']
+                    self.setEffect(effect)
             return None
 
     def onDraw(self):
