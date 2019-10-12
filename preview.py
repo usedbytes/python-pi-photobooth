@@ -209,45 +209,46 @@ class PreviewActivity(activity.Activity):
         self.capture_thread.join()
         self.onPause()
 
-    def onInputReceived(self, event):
-        if 'button' in event and event['button'] == SHUTTER_BUTTON:
-            if self.state == PreviewActivity.COUNTDOWN:
-                self.stopCountdown()
-            elif self.state == PreviewActivity.NONE:
-                self.startCountdown()
-        elif 'button' in event and event['button'] == QUAD_BUTTON:
-            if self.state == PreviewActivity.NONE:
-                self.quad = not(self.quad)
-                self.cosmic.led(QUAD_BUTTON).set(self.quad)
-        elif 'encoder' in event:
-            if self.state == PreviewActivity.NONE:
-                self.effect = self.effect + event['encoder']
-                if self.effect < 0:
-                    self.effect += len(self.effects)
-                elif self.effect >= len(self.effects):
-                    self.effect -= len(self.effects)
-                effect = self.effects[self.effect]
-                self.camera.image_effect = effect[1]
-                self.camera.color_effects = effect[3]
-                if effect[2] is not None:
-                    self.camera.image_effect_params = effect[2]
+    def onInputReceived(self, events):
+        for event in events:
+            if 'button' in event and event['button'] == SHUTTER_BUTTON:
+                if self.state == PreviewActivity.COUNTDOWN:
+                    self.stopCountdown()
+                elif self.state == PreviewActivity.NONE:
+                    self.startCountdown()
+            elif 'button' in event and event['button'] == QUAD_BUTTON:
+                if self.state == PreviewActivity.NONE:
+                    self.quad = not(self.quad)
+                    self.cosmic.led(QUAD_BUTTON).set(self.quad)
+            elif 'encoder' in event:
+                if self.state == PreviewActivity.NONE:
+                    self.effect = self.effect + event['encoder']
+                    if self.effect < 0:
+                        self.effect += len(self.effects)
+                    elif self.effect >= len(self.effects):
+                        self.effect -= len(self.effects)
+                    effect = self.effects[self.effect]
+                    self.camera.image_effect = effect[1]
+                    self.camera.color_effects = effect[3]
+                    if effect[2] is not None:
+                        self.camera.image_effect_params = effect[2]
 
-                if self.efovl is not None:
-                    self.efovl.close()
-                    self.efovl = None
+                    if self.efovl is not None:
+                        self.efovl.close()
+                        self.efovl = None
 
-                if effect[-1] is not None:
-                    img = effect[-1]
-                    self.efovl = AlphaOverlay(self.camera, img.size)
-                    self.efovl.hide()
-                    self.efovl.window((
-                        int((self.screen_resolution[0] - img.size[0]) / 2),
-                        int(self.screen_resolution[1] / 20),
-                        int(img.size[0]),
-                        int(img.size[1]),
-                    ))
-                    self.efovl.set_content(img.tobytes())
-                    self.efovl.show()
+                    if effect[-1] is not None:
+                        img = effect[-1]
+                        self.efovl = AlphaOverlay(self.camera, img.size)
+                        self.efovl.hide()
+                        self.efovl.window((
+                            int((self.screen_resolution[0] - img.size[0]) / 2),
+                            int(self.screen_resolution[1] / 20),
+                            int(img.size[0]),
+                            int(img.size[1]),
+                        ))
+                        self.efovl.set_content(img.tobytes())
+                        self.efovl.show()
 
     def onDraw(self):
         now = time.time()

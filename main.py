@@ -4,6 +4,7 @@ import pygame
 import RPi.GPIO as GPIO
 import time
 
+import activity
 import album
 import cosmic
 import preview
@@ -54,29 +55,35 @@ pygame.display.flip()
 
 album = album.Album('out')
 
-current = preview.PreviewActivity(cosmic=panel, screen=screen, screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
-
-current.onResume()
+am = activity.ActivityManager()
+am.register('preview',
+        preview.PreviewActivity(cosmic=panel, screen=screen, screen_resolution=window_size,
+                resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
+)
+am.start('preview')
 
 try:
     encoder_pos = panel.count()
     while True:
         time.sleep (1.0/24)
 
+        events = []
         if panel.pressed(PLAY_BUTTON):
             print("Button 1 (Play)")
+            events.append({'button': PLAY_BUTTON})
         if panel.pressed(QUAD_BUTTON):
-            current.onInputReceived({'button': QUAD_BUTTON})
+            events.append({'button': QUAD_BUTTON})
         if panel.pressed(SHUTTER_BUTTON):
-            current.onInputReceived({'button': SHUTTER_BUTTON})
+            events.append({'button': SHUTTER_BUTTON})
         if panel.count() != encoder_pos:
             val = sign(panel.count() - encoder_pos)
             encoder_pos += val
-            current.onInputReceived({'encoder': val})
+            events.append({'encoder': val})
 
-        current.onDraw()
+        am.tick(events)
+
 except KeyboardInterrupt:
     pass
 
-current.onExit()
+am.stop()
 GPIO.cleanup()
