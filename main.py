@@ -4,10 +4,9 @@ import pygame
 import RPi.GPIO as GPIO
 import time
 
-#import tkinter
+import album
 import cosmic
 import preview
-import album
 
 from consts import SHUTTER_BUTTON, QUAD_BUTTON, PLAY_BUTTON
 
@@ -23,18 +22,6 @@ pin_led1 = 14
 pin_led2 = 15
 pin_led3 = 16
 
-GPIO.setmode(GPIO.BCM)
-
-panel = cosmic.Cosmic(pin_enc_a, pin_enc_b, pin_enc_button,
-            pin_b1, pin_b2, pin_b3,
-            pin_led1, pin_led2, pin_led3)
-
-
-#window_size = (root.winfo_width(), root.winfo_height())
-#root.geometry('%dx%d+0+0' % (window_size[0], window_size[1]))
-
-#pimg.paste(png, (int((padded_size[0] - png.size[0]) / 2), int((padded_size[1] - png.size[1]) / 2)), png)
-
 def sign(val):
     if val > 0:
         return 1
@@ -42,7 +29,6 @@ def sign(val):
         return -1
     else:
         return 0
-
 
 # (3280, 2464): v2 module max resolution
 #capture_resolution = (3280, 2464)
@@ -54,12 +40,11 @@ preview_resolution = (768, 576)
 
 window_size = (1024, 600)
 
-#root = tkinter.Tk()
-#root.config(cursor='none')
-#root.attributes("-fullscreen", True)
-#root.configure(background='blue')
-#root.update()
-#app = tkinter.Frame(root)
+GPIO.setmode(GPIO.BCM)
+
+panel = cosmic.Cosmic(pin_enc_a, pin_enc_b, pin_enc_button,
+            pin_b1, pin_b2, pin_b3,
+            pin_led1, pin_led2, pin_led3)
 
 pygame.init()
 screen = pygame.display.set_mode((1024, 600))
