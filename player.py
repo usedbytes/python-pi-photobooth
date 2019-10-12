@@ -6,6 +6,8 @@ import threading
 from consts import SHUTTER_BUTTON, QUAD_BUTTON, PLAY_BUTTON
 
 def add_wrap(val, add, n):
+    if n == 0:
+        return val
     return (val + add) % n
 
 class ImageCache(dict):
@@ -79,9 +81,9 @@ class PlayerActivity(activity.Activity):
             [0, 255, 255],
         ]
         self.files = self.album.list()
-        self.cache = ImageCache(12, self.files, self.main_resolution, self.small_resolution)
+        self.cache = None
         self.idx = 0
-        self.dirty = True
+        self.dirty = False
 
         top_border = (self.screen_resolution[1] - self.main_resolution[1]) / 2
         self.rects = [
@@ -102,18 +104,24 @@ class PlayerActivity(activity.Activity):
         self.cosmic.led(PLAY_BUTTON).on()
         self.screen.fill((255, 255, 255))
         self.screen.fill((255, 255, 0), self.rects[2].inflate(8, 8))
-        pygame.display.update()
         self.files = self.album.list()
-        self.cache = ImageCache(12, self.files, self.main_resolution, self.small_resolution)
-        self.idx = 0
-        self.cache.get(self.idx)
-        self.dirty = True
+        if len(self.files) > 0:
+            self.cache = ImageCache(12, self.files, self.main_resolution, self.small_resolution)
+            self.idx = 0
+            self.cache.get(self.idx)
+            self.dirty = True
+        else:
+            self.screen.fill((180, 180, 180), self.rects[0])
+            self.screen.fill((180, 180, 180), self.rects[1])
+            self.screen.fill((180, 180, 180), self.rects[2])
+            self.screen.fill((180, 180, 180), self.rects[3])
+        pygame.display.update()
 
     def onPause(self):
         self.cosmic.led(PLAY_BUTTON).off()
 
     def onDraw(self):
-        if not self.dirty:
+        if not self.dirty or len(self.files) == 0:
             return
 
         # Main picture in main and middle slot
