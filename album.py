@@ -1,12 +1,14 @@
 import os
 import shutil
 import datetime
+import glob
 
 from PIL import Image
 
 class Album:
     def __init__(self, directory, backup = None):
         self.directory = directory
+        self.ext = 'jpg'
         try:
             os.mkdir(self.directory)
         except FileExistsError:
@@ -48,5 +50,8 @@ class Album:
             return filename
 
     def genFilename(self):
-        return "{}/IMG_{}.jpg".format(self.directory,
-                datetime.datetime.utcnow().strftime("%Y-%m-%d_%H%M%SUTC"))
+        return "{}/IMG_{}.{}".format(self.directory,
+                datetime.datetime.utcnow().strftime("%Y-%m-%d_%H%M%SUTC"), self.ext)
+
+    def list(self):
+        return sorted(glob.glob(os.path.join(os.path.abspath(self.directory), '*.{}'.format(self.ext))))

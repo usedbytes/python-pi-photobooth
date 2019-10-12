@@ -78,6 +78,7 @@ try:
         time.sleep (1.0/24)
 
         events = []
+        count = panel.count()
         if panel.pressed(PLAY_BUTTON):
             print("Button 1 (Play)")
             events.append({'button': PLAY_BUTTON})
@@ -85,8 +86,8 @@ try:
             events.append({'button': QUAD_BUTTON})
         if panel.pressed(SHUTTER_BUTTON):
             events.append({'button': SHUTTER_BUTTON})
-        if panel.count() != encoder_pos:
-            val = sign(panel.count() - encoder_pos)
+        if count != encoder_pos:
+            val = sign(count - encoder_pos)
             encoder_pos += val
             events.append({'encoder': val})
 
