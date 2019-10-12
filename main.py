@@ -7,6 +7,7 @@ import time
 import activity
 import album
 import cosmic
+import player
 import preview
 
 from consts import SHUTTER_BUTTON, QUAD_BUTTON, PLAY_BUTTON
@@ -60,6 +61,9 @@ am.register('preview',
         preview.PreviewActivity(cosmic=panel, screen=screen, screen_resolution=window_size,
                 resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
 )
+am.register('player',
+        player.PlayerActivity(cosmic=panel, screen=screen, album=album)
+)
 am.start('preview')
 
 try:
@@ -85,5 +89,5 @@ try:
 except KeyboardInterrupt:
     pass
 
-am.stop()
+am.exit()
 GPIO.cleanup()

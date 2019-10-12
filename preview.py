@@ -194,6 +194,8 @@ class PreviewActivity(activity.Activity):
 
 
     def onResume(self):
+        self.screen.fill((0, 0, 0))
+        pygame.display.flip()
         self.camera.start_preview(resolution=self.preview_resolution)
 
     def onPause(self):
@@ -220,6 +222,9 @@ class PreviewActivity(activity.Activity):
                 if self.state == PreviewActivity.NONE:
                     self.quad = not(self.quad)
                     self.cosmic.led(QUAD_BUTTON).set(self.quad)
+            elif 'button' in event and event['button'] == PLAY_BUTTON:
+                if self.state == PreviewActivity.NONE:
+                    return 'player'
             elif 'encoder' in event:
                 if self.state == PreviewActivity.NONE:
                     self.effect = self.effect + event['encoder']
@@ -249,6 +254,7 @@ class PreviewActivity(activity.Activity):
                         ))
                         self.efovl.set_content(img.tobytes())
                         self.efovl.show()
+            return None
 
     def onDraw(self):
         now = time.time()

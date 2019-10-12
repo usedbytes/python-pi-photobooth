@@ -15,6 +15,9 @@ class Activity():
     def onInputReceived(self, events):
         pass
 
+    def onExit(self):
+        pass
+
 class ActivityManager():
     def __init__(self):
         self.activities = { }
@@ -32,6 +35,12 @@ class ActivityManager():
     def stop(self):
         self.current.onPause()
 
+    def exit(self):
+        for name, activity in self.activities.items():
+            activity.onExit()
+
     def tick(self, events):
-        self.current.onInputReceived(events)
+        new = self.current.onInputReceived(events)
         self.current.onDraw()
+        if new is not None:
+            self.start(new)
