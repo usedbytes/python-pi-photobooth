@@ -135,7 +135,7 @@ class PlayerActivity(activity.Activity):
 
     def onInputReceived(self, events):
         for event in events:
-            if 'button' in event and event['button'] == PLAY_BUTTON:
+            if 'button' in event and (event['button'] == PLAY_BUTTON or event['button'] == SHUTTER_BUTTON):
                 return 'preview'
             elif 'encoder' in event:
                 self.idx = add_wrap(self.idx, event['encoder'], len(self.files))
