@@ -30,22 +30,13 @@ pin_led3 = 16
 
 GPIO.setmode(GPIO.BCM)
 
-# Playback
-button1 = cosmic.Button(pin_b1)
-# 4up
-button2 = cosmic.Button(pin_b2)
-# Take photo
-button3 = cosmic.Button(pin_b3)
+panel = cosmic.Cosmic(pin_enc_a, pin_enc_b, pin_enc_button,
+            pin_b1, pin_b2, pin_b3,
+            pin_led1, pin_led2, pin_led3)
 
-enc = cosmic.Encoder(pin_enc_a, pin_enc_b, pin_enc_button)
-
-led1 = cosmic.LED(pin_led1)
-led2 = cosmic.LED(pin_led2)
-led3 = cosmic.LED(pin_led3)
-
-SHUTTER_BUTTON = 3
-QUAD_BUTTON = 2
-PLAY_BUTTON = 1
+SHUTTER_BUTTON = 2
+QUAD_BUTTON = 1
+PLAY_BUTTON = 0
 
 #window_size = (root.winfo_width(), root.winfo_height())
 #root.geometry('%dx%d+0+0' % (window_size[0], window_size[1]))
@@ -193,8 +184,9 @@ class PreviewActivity(Activity):
     REPEATSHUTTER = 3
     REVIEW = 4
 
-    def __init__(self, screen_resolution, resolution, preview_resolution, album):
+    def __init__(self, cosmic, screen_resolution, resolution, preview_resolution, album):
         self.album = album
+        self.cosmic = cosmic
         self.state = PreviewActivity.NONE
         self.substate = 0
         self.time = time.time()
@@ -281,7 +273,7 @@ class PreviewActivity(Activity):
         elif 'button' in event and event['button'] == QUAD_BUTTON:
             if self.state == PreviewActivity.NONE:
                 self.quad = not(self.quad)
-                led2.set(self.quad)
+                self.cosmic.led(QUAD_BUTTON).set(self.quad)
         elif 'encoder' in event:
             if self.state == PreviewActivity.NONE:
                 self.effect = self.effect + event['encoder']
@@ -317,21 +309,21 @@ class PreviewActivity(Activity):
         since = now - self.time
         if self.state == PreviewActivity.COUNTDOWN:
             if self.substate == 0 and since > 0.8:
-                led3.off()
+                self.cosmic.led(SHUTTER_BUTTON).off()
                 self.substate = 1
             elif self.substate == 1 and since > 1.0 :
                 self.covl.set_content(self.images['2'].tobytes())
-                led3.on()
+                self.cosmic.led(SHUTTER_BUTTON).on()
                 self.substate = 2
             elif self.substate == 2 and since > 1.8:
-                led3.off()
+                self.cosmic.led(SHUTTER_BUTTON).off()
                 self.substate = 3
             elif self.substate == 3 and since > 2.0:
                 self.covl.set_content(self.images['1'].tobytes())
-                led3.on()
+                self.cosmic.led(SHUTTER_BUTTON).on()
                 self.substate = 4
             elif self.substate == 4 and since > 2.8:
-                led3.off()
+                self.cosmic.led(SHUTTER_BUTTON).off()
                 self.substate = 5
             elif self.substate == 5 and since > 3.0:
                 # Relies on us being single-threaded here to not
@@ -362,7 +354,7 @@ class PreviewActivity(Activity):
         if self.covl is not None:
             self.covl.close()
             self.covl = None
-        led3.off()
+        self.cosmic.led(SHUTTER_BUTTON).off()
 
     def startCountdown(self):
         self.state = PreviewActivity.COUNTDOWN
@@ -382,7 +374,7 @@ class PreviewActivity(Activity):
         ))
         self.covl.set_content(self.images['3'].tobytes())
         self.covl.show()
-        led3.on()
+        self.cosmic.led(SHUTTER_BUTTON).on()
 
     def stopShutter(self):
         im = self.capture_thread.getPhoto(blocking=False)
@@ -392,7 +384,8 @@ class PreviewActivity(Activity):
         self.frames.append(im)
 
         self.state = PreviewActivity.NONE
-        led3.off()
+        self.cosmic.led(SHUTTER_BUTTON).off()
+
         if self.shovl is not None:
             self.shovl.close()
             self.shovl = None
@@ -420,7 +413,7 @@ class PreviewActivity(Activity):
 
     def startShutter(self):
         self.state = PreviewActivity.SHUTTER
-        led3.on()
+        self.cosmic.led(SHUTTER_BUTTON).on()
         self.time = time.time()
         self.shovl = Overlay(self.camera, self.preview_resolution, color='white')
         self.shovl.show()
@@ -502,23 +495,23 @@ pygame.display.flip()
 
 album = Album('out')
 
-current = PreviewActivity(screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
+current = PreviewActivity(cosmic=panel, screen_resolution=window_size, resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
 
 current.onResume()
 
 try:
-    encoder_pos = enc.count()
+    encoder_pos = panel.count()
     while True:
         time.sleep (1.0/24)
 
-        if button1.pressed():
+        if panel.pressed(PLAY_BUTTON):
             print("Button 1 (Play)")
-        if button2.pressed():
+        if panel.pressed(QUAD_BUTTON):
             current.onInputReceived({'button': QUAD_BUTTON})
-        if button3.pressed():
+        if panel.pressed(SHUTTER_BUTTON):
             current.onInputReceived({'button': SHUTTER_BUTTON})
-        if enc.count() != encoder_pos:
-            val = sign(enc.count() - encoder_pos)
+        if panel.count() != encoder_pos:
+            val = sign(panel.count() - encoder_pos)
             encoder_pos += val
             current.onInputReceived({'encoder': val})
 

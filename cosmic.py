@@ -93,3 +93,28 @@ class LED():
     def toggle(self):
         self._state = not(self._state)
         GPIO.output(self._pin, self._state)
+
+class Cosmic:
+    def __init__(self, pin_enc_a, pin_enc_b, pin_enc_button,
+                    pin_b1, pin_b2, pin_b3,
+                    pin_led1, pin_led2, pin_led3):
+        self.buttons = [
+            Button(pin_b1),
+            Button(pin_b2),
+            Button(pin_b3),
+        ]
+        self.leds = [
+            LED(pin_led1),
+            LED(pin_led2),
+            LED(pin_led3),
+        ]
+        self.enc = Encoder(pin_enc_a, pin_enc_b, pin_enc_button)
+
+    def pressed(self, button):
+        return self.buttons[button].pressed()
+
+    def count(self):
+        return self.enc.count()
+
+    def led(self, led):
+        return self.leds[led]
