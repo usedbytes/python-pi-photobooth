@@ -54,4 +54,4 @@ class Album:
                 datetime.datetime.utcnow().strftime("%Y-%m-%d_%H%M%SUTC"), self.ext)
 
     def list(self):
-        return sorted(glob.glob(os.path.join(os.path.abspath(self.directory), '*.{}'.format(self.ext))))
+        return sorted(glob.glob(os.path.join(os.path.abspath(self.directory), '*.{}'.format(self.ext))), reverse=True)

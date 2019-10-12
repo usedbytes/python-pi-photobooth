@@ -9,7 +9,6 @@ def add_wrap(val, add, n):
     return (val + add) % n
 
 class ImageCache(dict):
-
     def __init__(self, nslots, files, large_res, small_res, start_idx = 0):
         self.sem = threading.Semaphore()
         self.items = {}
@@ -105,6 +104,7 @@ class PlayerActivity(activity.Activity):
         self.screen.fill((255, 255, 0), self.rects[2].inflate(8, 8))
         pygame.display.update()
         self.files = self.album.list()
+        self.cache = ImageCache(12, self.files, self.main_resolution, self.small_resolution)
         self.idx = 0
         self.cache.get(self.idx)
         self.dirty = True
