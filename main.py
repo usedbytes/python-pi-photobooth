@@ -79,7 +79,6 @@ try:
         events = []
         count = panel.count()
         if panel.pressed(PLAY_BUTTON):
-            print("Button 1 (Play)")
             events.append({'button': PLAY_BUTTON})
         if panel.pressed(QUAD_BUTTON):
             events.append({'button': QUAD_BUTTON})
