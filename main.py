@@ -46,8 +46,7 @@ window_size = (1024, 600)
 
 GPIO.setmode(GPIO.BCM)
 
-flash = cosmic.LED(pin_flash)
-flash.on()
+flash = cosmic.LED(pin_flash, True)
 
 panel = cosmic.Cosmic(pin_enc_a, pin_enc_b, pin_enc_button,
             pin_b1, pin_b2, pin_b3,
@@ -64,7 +63,7 @@ album = album.Album('out')
 am = activity.ActivityManager()
 am.register('preview',
         preview.PreviewActivity(cosmic=panel, screen=screen, screen_resolution=window_size,
-                resolution=capture_resolution, preview_resolution=preview_resolution, album=album)
+                resolution=capture_resolution, preview_resolution=preview_resolution, album=album, flash=flash)
 )
 am.register('player',
         player.PlayerActivity(cosmic=panel, screen=screen, screen_resolution=window_size,

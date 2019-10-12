@@ -69,25 +69,26 @@ class Encoder(Button):
         return count
 
 class LED():
-    def __init__(self, pin):
+    def __init__(self, pin, invert = False):
         self._pin = pin
-        self._state = 0
+        self.invert = invert
+        self._state = invert
         GPIO.setup(self._pin, GPIO.OUT)
         GPIO.output(self._pin, 0)
 
     def on(self):
-        self._state = 1
-        GPIO.output(self._pin, 1)
+        self._state = not(self.invert)
+        GPIO.output(self._pin, self._state)
 
     def off(self):
-        self._state = 0
-        GPIO.output(self._pin, 0)
+        self._state = self.invert
+        GPIO.output(self._pin, self._state)
 
     def set(self, state):
         if state:
-            self._state = 1
+            self._state = not(self.invert)
         else:
-            self._state = 0
+            self._state = self.invert
         GPIO.output(self._pin, self._state)
 
     def toggle(self):

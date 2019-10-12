@@ -128,7 +128,8 @@ class PreviewActivity(activity.Activity):
     REPEATSHUTTER = 3
     REVIEW = 4
 
-    def __init__(self, cosmic, screen, screen_resolution, resolution, preview_resolution, album):
+    def __init__(self, cosmic, screen, screen_resolution, resolution, preview_resolution, album, flash):
+        self.flash = flash
         self.album = album
         self.screen = screen
         self.cosmic = cosmic
@@ -194,11 +195,13 @@ class PreviewActivity(activity.Activity):
 
 
     def onResume(self):
+        self.flash.on()
         self.screen.fill((0, 0, 0))
         pygame.display.flip()
         self.camera.start_preview(resolution=self.preview_resolution)
 
     def onPause(self):
+        self.flash.off()
         self.stopCountdown()
         self.stopShutter()
         if self.efovl is not None:
