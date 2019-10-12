@@ -225,6 +225,9 @@ class PreviewActivity(activity.Activity):
             elif 'button' in event and event['button'] == PLAY_BUTTON:
                 if self.state == PreviewActivity.NONE:
                     return 'player'
+                elif self.state == PreviewActivity.REVIEW:
+                    self.stopReview()
+                    return 'player'
             elif 'encoder' in event:
                 if self.state == PreviewActivity.NONE:
                     self.effect = self.effect + event['encoder']
@@ -295,11 +298,25 @@ class PreviewActivity(activity.Activity):
                 self.startShutter()
         elif self.state == PreviewActivity.REVIEW:
             if since >= self.substate:
-                self.screen.fill((0, 0, 0))
-                pygame.display.flip()
-                self.revovl.close()
-                self.revovl = None
-                self.state = PreviewActivity.NONE
+                self.stopReview()
+
+    def startReview(self, filename, seconds):
+            self.revovl = Overlay(self.camera, self.preview_resolution)
+            self.revovl.from_file(filename, True)
+            self.revovl.show()
+
+            self.screen.fill((255, 255, 255))
+            pygame.display.flip()
+            self.state = PreviewActivity.REVIEW
+            self.substate = seconds
+            self.time = time.time()
+
+    def stopReview(self):
+        self.screen.fill((0, 0, 0))
+        pygame.display.flip()
+        self.revovl.close()
+        self.revovl = None
+        self.state = PreviewActivity.NONE
 
     def stopCountdown(self):
         self.state = PreviewActivity.NONE
@@ -347,21 +364,13 @@ class PreviewActivity(activity.Activity):
             self.state = PreviewActivity.REPEATSHUTTER
         else:
             # Hack: Longer review for quads
-            self.substate = 2.0
+            revtime = 2.0
             if len(self.frames) == 4:
-                self.substate = 4.0
+                revtime = 4.0
 
             filename = self.album.writeOut(self.frames)
             self.frames = None
-
-            self.revovl = Overlay(self.camera, self.preview_resolution)
-            self.revovl.from_file(filename, True)
-            self.revovl.show()
-
-            self.screen.fill((255, 255, 255))
-            pygame.display.flip()
-            self.state = PreviewActivity.REVIEW
-            self.time = time.time()
+            self.startReview(filename, revtime)
 
     def startShutter(self):
         self.state = PreviewActivity.SHUTTER
