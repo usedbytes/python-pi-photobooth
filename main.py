@@ -70,7 +70,7 @@ am.register('player',
         player.PlayerActivity(cosmic=panel, screen=screen, screen_resolution=window_size,
                 album=album)
 )
-am.start('player')
+am.start('preview')
 
 try:
     encoder_pos = panel.count()
