@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# Copyright 2019-2020 Brian Starkey <stark3y@gmail.com>
+# SPDX-License-Identifier: MIT
+
 import time
 import threading
 import RPi.GPIO as GPIO

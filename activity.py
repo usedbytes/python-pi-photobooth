@@ -1,3 +1,5 @@
+# Copyright 2019-2020 Brian Starkey <stark3y@gmail.com>
+# SPDX-License-Identifier: MIT
 
 class Activity():
     def __init__(self):
